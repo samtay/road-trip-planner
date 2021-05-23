@@ -1,19 +1,17 @@
 use anyhow::Result;
 use clap::{App, ArgMatches};
-use serde_json::Value;
-use std::env;
-use std::fs::File;
+use geo::prelude::HaversineDistance;
+use geo::{point, Point};
+use itertools::Itertools;
+use serde::Deserialize;
 
 fn main() -> Result<()> {
     let cli = cli_opts();
-    let key = cli
-        .value_of("key")
-        .map(String::from)
-        .or_else(|| env::var("NPS_API_KEY").ok());
+    // TODO pass sub_command matches to `fetch` and parse this key over there
     match cli.subcommand_name() {
-        Some("fetch") => {
-            fetch(key.unwrap())?;
-            populate_facts()?;
+        Some("fetch") => {}
+        Some("refresh-distances") => {
+            refresh_distances()?;
         }
         _ => (),
     }
@@ -24,38 +22,47 @@ fn main() -> Result<()> {
 fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
-        .arg("-k, --key=[API-KEY] 'Set NPS API key'")
-        .subcommand(
-            App::new("fetch").about("fetch the data"), //.arg("--path 'Path to output file'"),
-        )
+        //.arg("-k, --key=[API-KEY] 'Set NPS API key'")
+        .subcommand(App::new("refresh-distances").about("Generate distance.facts"))
         .get_matches()
 }
 
-/// Fetch data from NPS
-fn fetch(key: String) -> Result<()> {
-    let json: Value = ureq::get("https://developer.nps.gov/api/v1/campgrounds")
-        .set("X-Api-Key", &key)
-        .query("limit", "613")
-        .call()?
-        .into_json()?;
-    let file = File::create("data/campgrounds.json")?;
-    serde_json::to_writer(file, &json)?;
-    Ok(())
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+struct LocationRow {
+    camp_id: String,
+    latitude: f64,
+    longitude: f64,
 }
 
-fn populate_facts() -> Result<()> {
-    // Fields of interest:
-    // parkCode
-    // name
-    // latitude
-    // longitude // or "latLong": "{lat:29.51187, lng:-100.907479}"
-    // accessibility
-    //   rvAllowed == "1"
-    //   rvMaxLength ? == "0" or >=34
-    // amenities
-    //   internetConnectivity
-    //   cellPhoneReception
-    //   dumpStation
-    // fees
+impl LocationRow {
+    pub fn coordinate(&self) -> Point<f64> {
+        point!(x: self.latitude, y: self.longitude)
+    }
+}
+
+/// Generate distance.facts
+fn refresh_distances() -> Result<()> {
+    let pairs = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .from_path("data/location.facts")?
+        .into_deserialize()
+        .map(|x: std::result::Result<LocationRow, csv::Error>| x.unwrap())
+        .combinations(2);
+    let mut writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        //.quote_style(?)
+        .from_path("data/distance.facts")?;
+    for pair in pairs {
+        writer.write_record(&[
+            &pair[0].camp_id,
+            &pair[1].camp_id,
+            &pair[0]
+                .coordinate()
+                .haversine_distance(&pair[1].coordinate())
+                .to_string(),
+        ])?;
+    }
     Ok(())
 }

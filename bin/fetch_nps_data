@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+mkdir -p data
+
+# get total number of campgrounds
+total=$(curl \
+  -H "X-Api-Key: $NPS_API_KEY" \
+  -H "accept: application/json" \
+  -X GET "https://developer.nps.gov/api/v1/campgrounds?limit=0" |
+    jq -r '.total'
+)
+
+# fetch all those campgrounds
+curl \
+  -H "X-Api-Key: $NPS_API_KEY" \
+  -H "accept: application/json" \
+  -X GET "https://developer.nps.gov/api/v1/campgrounds?limit=$total" |
+  jq -c '.data' > data/campgrounds.json

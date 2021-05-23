@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+cd data
+
+# parks
+# TODO get park codes/names from parks endpoint
+jq -r "map(.parkCode) | unique | .[]" campgrounds.json > park.facts
+
+# campgrounds
+filter=$(cat <<-jqfilter
+    .[]
+  | select(.accessibility.rvAllowed == "1")
+  | [.id, .parkCode]
+  | @tsv
+jqfilter
+)
+jq -r "$filter" campgrounds.json > campground.facts
+
+# campground locations
+filter=$(cat <<-jqfilter
+    .[]
+  | select(.accessibility.rvAllowed == "1")
+  | [.id, .latitude, .longitude]
+  | @tsv
+jqfilter
+)
+jq -r "$filter" campgrounds.json > location.facts
+
+# campground rv amenities
+filter=$(cat <<-jqfilter
+    .[]
+  | select(.accessibility.rvAllowed == "1")
+  | [.id,
+     .accessibility.rvMaxLength,
+     .amenities.internetConnectivity,
+     .amenities.cellPhoneReception,
+     .amenities.dumpStation
+     ]
+  | @tsv
+jqfilter
+)
+jq -r "$filter" campgrounds.json > amenities.facts
