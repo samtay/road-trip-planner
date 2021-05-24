@@ -35,8 +35,15 @@ struct LocationRow {
 }
 
 impl LocationRow {
-    pub fn coordinate(&self) -> Point<f64> {
+    fn coordinate(&self) -> Point<f64> {
         point!(x: self.latitude, y: self.longitude)
+    }
+
+    /// Distance to another location in miles
+    pub fn distance_to(&self, other: &LocationRow) -> f64 {
+        const MILES_PER_METER: f64 = 0.000621371;
+        let meters = self.coordinate().haversine_distance(&other.coordinate());
+        return meters * MILES_PER_METER;
     }
 }
 
@@ -58,10 +65,7 @@ fn refresh_distances() -> Result<()> {
         writer.write_record(&[
             &pair[0].camp_id,
             &pair[1].camp_id,
-            &pair[0]
-                .coordinate()
-                .haversine_distance(&pair[1].coordinate())
-                .to_string(),
+            &pair[0].distance_to(&pair[1]).round().to_string(),
         ])?;
     }
     Ok(())
