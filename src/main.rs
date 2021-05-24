@@ -47,7 +47,7 @@ fn refresh_distances() -> Result<()> {
         .delimiter(b'\t')
         .from_path("data/location.facts")?
         .into_deserialize()
-        .map(|x: std::result::Result<LocationRow, csv::Error>| x.unwrap())
+        .filter_map(|x: std::result::Result<LocationRow, csv::Error>| x.ok())
         .combinations(2);
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
