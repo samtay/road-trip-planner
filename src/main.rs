@@ -1,19 +1,27 @@
-use anyhow::Result;
+use anyhow::{bail, ensure, Result};
 use clap::{App, ArgMatches};
 use geo::prelude::HaversineDistance;
 use geo::{point, Point};
 use itertools::Itertools;
 use serde::Deserialize;
+use std::process::Command;
 
 fn main() -> Result<()> {
     let cli = cli_opts();
-    // TODO pass sub_command matches to `fetch` and parse this key over there
     match cli.subcommand_name() {
-        Some("fetch") => {}
+        Some("fetch-data") => {
+            fetch_data()?;
+        }
         Some("refresh-distances") => {
             refresh_distances()?;
         }
-        _ => (),
+        Some(_) => {
+            bail!("subcommand not recognized");
+        }
+        None => {
+            fetch_data()?;
+            refresh_distances()?;
+        }
     }
     Ok(())
 }
@@ -22,9 +30,18 @@ fn main() -> Result<()> {
 fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
-        //.arg("-k, --key=[API-KEY] 'Set NPS API key'")
+        .subcommand(App::new("fetch-data").about("Fetch NPS facts"))
         .subcommand(App::new("refresh-distances").about("Generate distance.facts"))
         .get_matches()
+}
+
+/// Fetch data (via scripts in ./bin)
+fn fetch_data() -> Result<()> {
+    let status = Command::new("sh").arg("bin/fetch_nps_data").status()?;
+    ensure!(status.success(), "couldn't fetch nps data");
+    let status = Command::new("sh").arg("bin/json_to_facts").status()?;
+    ensure!(status.success(), "couldn't convert json to facts");
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
