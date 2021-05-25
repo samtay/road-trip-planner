@@ -1,0 +1,21 @@
+/************ data model **************/
+.type ParkId <: symbol
+.type CampId <: symbol
+.type Name <: symbol
+.type Distance <: number
+
+.decl camp(camp:CampId, park: ParkId, name:Name)
+.input camp(filename="data/campground.facts")
+
+.decl park(park:ParkId, name:Name)
+.input park(filename="data/park.facts")
+
+.decl distance(camp1:CampId, camp2:CampId, dist: Distance)
+.input distance(filename="data/distance.facts")
+
+/************* problem 0 **************/
+/**** Find all children of Priscilla ****/
+
+.decl test(n: Name, m: Name, l: Distance)
+.output test(IO=stdout)
+test(n, m, l) :- camp(e, "ever", n), camp(o, "olym", m), (distance(e,o,l) ; distance(o,e,l)).

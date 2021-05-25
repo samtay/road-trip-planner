@@ -4,14 +4,19 @@ set -eo pipefail
 cd data
 
 # parks
-# TODO get park codes/names from parks endpoint
-jq -r "map(.parkCode) | unique | .[]" campgrounds.json > park.facts
+filter=$(cat <<-jqfilter
+    .[]
+  | [.parkCode, .fullName]
+  | @tsv
+jqfilter
+)
+jq -r "$filter" parks.json > park.facts
 
 # campgrounds
 filter=$(cat <<-jqfilter
     .[]
   | select(.accessibility.rvAllowed == "1")
-  | [.id, .parkCode]
+  | [.id, .parkCode, .name]
   | @tsv
 jqfilter
 )

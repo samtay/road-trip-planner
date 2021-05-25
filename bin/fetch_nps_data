@@ -3,17 +3,23 @@ set -eo pipefail
 
 mkdir -p data
 
-# get total number of campgrounds
-total=$(curl \
-  -H "X-Api-Key: $NPS_API_KEY" \
-  -H "accept: application/json" \
-  -X GET "https://developer.nps.gov/api/v1/campgrounds?limit=0" |
-    jq -r '.total'
-)
+fetch() {
+  local resource=$1
+  # get total number of campgrounds
+  local total
+  total=$(curl \
+    -H "X-Api-Key: $NPS_API_KEY" \
+    -H "accept: application/json" \
+    -X GET "https://developer.nps.gov/api/v1/$resource?limit=0" |
+      jq -r '.total'
+  )
+  # fetch all those campgrounds
+  curl \
+    -H "X-Api-Key: $NPS_API_KEY" \
+    -H "accept: application/json" \
+    -X GET "https://developer.nps.gov/api/v1/$resource?limit=$total" |
+    jq -c '.data' > data/"$resource".json
+}
 
-# fetch all those campgrounds
-curl \
-  -H "X-Api-Key: $NPS_API_KEY" \
-  -H "accept: application/json" \
-  -X GET "https://developer.nps.gov/api/v1/campgrounds?limit=$total" |
-  jq -c '.data' > data/campgrounds.json
+fetch "campgrounds"
+fetch "parks"
