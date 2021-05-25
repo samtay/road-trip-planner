@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+# ensure NPS_API_KEY set
+[[ -z "$NPS_API_KEY" ]] && {
+  echo "Missing NPS_API_KEY"
+  exit 1
+}
+
 mkdir -p data
+
 
 fetch() {
   local resource=$1
