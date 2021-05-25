@@ -25,7 +25,11 @@ jq -r "$filter" campgrounds.json > campground.facts
 # campground locations
 filter=$(cat <<-jqfilter
     .[]
-  | select(.accessibility.rvAllowed == "1")
+  | select(
+      .accessibility.rvAllowed == "1"
+      and .latitude != ""
+      and .longitude != ""
+    )
   | [.id, .latitude, .longitude]
   | @tsv
 jqfilter
