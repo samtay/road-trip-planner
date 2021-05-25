@@ -2,7 +2,7 @@
 .type ParkId <: symbol
 .type CampId <: symbol
 .type Name <: symbol
-.type Distance <: number
+.type Distance <: float
 
 .decl camp(camp:CampId, park: ParkId, name:Name)
 .input camp(filename="data/campground.facts")

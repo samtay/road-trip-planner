@@ -65,7 +65,7 @@ fn refresh_distances() -> Result<()> {
         writer.write_record(&[
             &pair[0].camp_id,
             &pair[1].camp_id,
-            &pair[0].distance_to(&pair[1]).round().to_string(),
+            &format!("{:.2}", &pair[0].distance_to(&pair[1])),
         ])?;
     }
     Ok(())
