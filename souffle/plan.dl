@@ -1,0 +1,33 @@
+/************ data model **************/
+.type ParkId <: symbol
+.type CampId <: symbol
+.type Name <: symbol
+.type Distance <: float
+
+.decl camp(camp:CampId, park: ParkId, name:Name)
+.input camp(filename="data/campground.facts")
+
+.decl park(park:ParkId, name:Name)
+.input park(filename="data/park.facts")
+
+.decl distance(camp1:CampId, camp2:CampId, dist: Distance)
+.input distance(filename="data/distance.facts")
+
+.decl location(camp:CampId, lat:float, long: float)
+.input location(filename="data/location.facts")
+
+/************* generate road trips **************/
+
+// Distance between stops shouldn't exceed 400 miles
+// Don't backtrack on longitude
+.decl segment_candidate(from:CampId, to:CampId)
+.output segment_candidate(IO=stdout)
+segment_candidate(f, t) :-
+  (distance(f,t,l) ; distance(t,f,l)),
+  l <= 400,
+  location(f, _, f_long),
+  location(t, _, t_long),
+  f_long >= t_long.
+
+
+/*.decl road_trip(*/

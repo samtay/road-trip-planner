@@ -1,6 +1,6 @@
 use anyhow::{bail, ensure, Result};
 use clap::{App, ArgMatches};
-use geo::prelude::HaversineDistance;
+use geo::prelude::*;
 use geo::{point, Point};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -12,15 +12,11 @@ fn main() -> Result<()> {
         Some("fetch-data") => {
             fetch_data()?;
         }
-        Some("refresh-distances") => {
-            refresh_distances()?;
-        }
         Some(_) => {
             bail!("subcommand not recognized");
         }
         None => {
             fetch_data()?;
-            refresh_distances()?;
         }
     }
     Ok(())
@@ -30,13 +26,19 @@ fn main() -> Result<()> {
 fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
-        .subcommand(App::new("fetch-data").about("Fetch NPS facts"))
-        .subcommand(App::new("refresh-distances").about("Generate distance.facts"))
+        .subcommand(App::new("fetch-data").about("Generate data/*.facts"))
         .get_matches()
 }
 
-/// Fetch data (via scripts in ./bin)
+/// Generate all the data/*.facts files with refreshed data from NPS
 fn fetch_data() -> Result<()> {
+    fetch_nps_data()?;
+    generate_distances()?;
+    Ok(())
+}
+
+/// Fetch NPS data (via scripts in ./bin)
+fn fetch_nps_data() -> Result<()> {
     let status = Command::new("sh").arg("bin/fetch_nps_data").status()?;
     ensure!(status.success(), "couldn't fetch nps data");
     let status = Command::new("sh").arg("bin/json_to_facts").status()?;
@@ -53,7 +55,7 @@ struct LocationRow {
 
 impl LocationRow {
     fn coordinate(&self) -> Point<f64> {
-        point!(x: self.latitude, y: self.longitude)
+        point!(x: self.longitude, y: self.latitude)
     }
 
     /// Distance to another location in miles
@@ -64,8 +66,8 @@ impl LocationRow {
     }
 }
 
-/// Generate distance.facts
-fn refresh_distances() -> Result<()> {
+/// Generate distance.facts from the NPS location.facts file
+fn generate_distances() -> Result<()> {
     let pairs = csv::ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
@@ -76,7 +78,6 @@ fn refresh_distances() -> Result<()> {
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
-        //.quote_style(?)
         .from_path("data/distance.facts")?;
     for pair in pairs {
         writer.write_record(&[
