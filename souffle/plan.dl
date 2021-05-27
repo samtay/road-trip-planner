@@ -5,29 +5,43 @@
 .type Distance <: float
 
 .decl camp(camp:CampId, park: ParkId, name:Name)
-.input camp(filename="data/campground.facts")
+.input camp(filename="campground.facts")
 
 .decl park(park:ParkId, name:Name)
-.input park(filename="data/park.facts")
+.input park(filename="park.facts")
 
 .decl distance(camp1:CampId, camp2:CampId, dist: Distance)
-.input distance(filename="data/distance.facts")
+.input distance(filename="distance.facts")
 
 .decl location(camp:CampId, lat:float, long: float)
-.input location(filename="data/location.facts")
+.input location(filename="location.facts")
 
 /************* generate road trips **************/
 
-// Distance between stops shouldn't exceed 400 miles
-// Don't backtrack on longitude
-.decl segment_candidate(from:CampId, to:CampId)
-.output segment_candidate(IO=stdout)
-segment_candidate(f, t) :-
+// Distance between stops shouldn't exceed 500 miles
+// We're going from FL to WA so don't backtrack east
+.decl segment_candidate(from:CampId, to:CampId, dist: Distance)
+segment_candidate(f, t, l) :-
   (distance(f,t,l) ; distance(t,f,l)),
-  l <= 400,
+  50 <= l,
+  l <= 500,
   location(f, _, f_long),
   location(t, _, t_long),
   f_long >= t_long.
 
+// Generate a non-deterministic path
+.decl road_trip_segment(from:CampId, to:CampId, dist: Distance, stop_ix: number) choice-domain from, to
+.output road_trip_segment(IO=stdout)
 
-/*.decl road_trip(*/
+// Start somewhere in the Everglades
+road_trip_segment(f, t, d, 1) :- camp(f, "ever", _), segment_candidate(f, t, d).
+road_trip_segment(f, t, acc+d, ix+1) :- road_trip_segment(_, f, acc, ix), segment_candidate(f, t, d).
+
+.decl ex(p1: Name, p2: Name, d: Distance, ix: number)
+.output ex(IO=stdout)
+ex(p1, p2, d, ix) :-
+  road_trip_segment(f, t, d, ix),
+  camp(f, pid1, _),
+  camp(t, pid2, _),
+  park(pid1, p1),
+  park(pid2, p2).
