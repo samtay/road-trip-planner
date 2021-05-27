@@ -4,16 +4,18 @@ use geo::prelude::*;
 use geo::{point, Point};
 use itertools::Itertools;
 use serde::Deserialize;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn main() -> Result<()> {
     let cli = cli_opts();
-    match cli.subcommand_name() {
-        Some("fetch-data") => {
+    match cli.subcommand() {
+        Some(("fetch-data", _)) => {
             fetch_data()?;
         }
-        Some("souffle") => {
-            //fetch_data()?;
+        Some(("souffle", sub)) => {
+            if sub.is_present("refresh") {
+                fetch_data()?;
+            }
             souffle()?;
         }
         Some(_) => {
@@ -32,7 +34,11 @@ fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
         .subcommand(App::new("fetch-data").about("Generate data/*.facts"))
-        .subcommand(App::new("souffle").about("Run souffle plan"))
+        .subcommand(
+            App::new("souffle")
+                .about("Run souffle plan")
+                .arg("-r, --refresh 'Use fresh NPS data'"),
+        )
         .get_matches()
 }
 
@@ -45,10 +51,19 @@ fn fetch_data() -> Result<()> {
 
 /// Fetch NPS data (via scripts in ./bin)
 fn fetch_nps_data() -> Result<()> {
-    let status = Command::new("sh").arg("bin/fetch_nps_data").status()?;
-    ensure!(status.success(), "couldn't fetch nps data");
-    let status = Command::new("sh").arg("bin/json_to_facts").status()?;
-    ensure!(status.success(), "couldn't convert json to facts");
+    fn run_script<S: AsRef<std::ffi::OsStr>>(script_path: S) -> Result<bool> {
+        let status = Command::new("sh")
+            .arg(script_path)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+        Ok(status.success())
+    }
+    ensure!(run_script("bin/fetch_nps_data")?, "couldn't fetch nps data");
+    ensure!(
+        run_script("bin/json_to_facts")?,
+        "couldn't convert json to facts"
+    );
     Ok(())
 }
 
