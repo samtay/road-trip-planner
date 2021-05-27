@@ -31,14 +31,13 @@ segment_candidate(f, t, l) :-
 
 // Generate a non-deterministic path
 .decl road_trip_segment(from:CampId, to:CampId, dist: Distance, stop_ix: number) choice-domain from, to
-.output road_trip_segment(IO=stdout)
 
 // Start somewhere in the Everglades
 road_trip_segment(f, t, d, 1) :- camp(f, "ever", _), segment_candidate(f, t, d).
 road_trip_segment(f, t, acc+d, ix+1) :- road_trip_segment(_, f, acc, ix), segment_candidate(f, t, d).
 
 .decl ex(p1: Name, p2: Name, d: Distance, ix: number)
-.output ex(IO=stdout)
+.output ex(filename="souffle-plan.tsv")
 ex(p1, p2, d, ix) :-
   road_trip_segment(f, t, d, ix),
   camp(f, pid1, _),

@@ -12,11 +12,16 @@ fn main() -> Result<()> {
         Some("fetch-data") => {
             fetch_data()?;
         }
+        Some("souffle") => {
+            //fetch_data()?;
+            souffle()?;
+        }
         Some(_) => {
             bail!("subcommand not recognized");
         }
         None => {
             fetch_data()?;
+            souffle()?;
         }
     }
     Ok(())
@@ -27,6 +32,7 @@ fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
         .subcommand(App::new("fetch-data").about("Generate data/*.facts"))
+        .subcommand(App::new("souffle").about("Run souffle plan"))
         .get_matches()
 }
 
@@ -85,6 +91,58 @@ fn generate_distances() -> Result<()> {
             &pair[1].camp_id,
             &format!("{:.2}", &pair[0].distance_to(&pair[1])),
         ])?;
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+struct ParkStop {
+    park_name_from: String,
+    park_name_to: String,
+    distance: f64,
+    stop_ix: u32,
+}
+
+/// Run souffle/plan.dl
+fn souffle() -> Result<()> {
+    let status = Command::new("souffle")
+        .arg("--fact-dir")
+        .arg("data")
+        .arg("--output-dir")
+        .arg("output")
+        .arg("souffle/plan.dl")
+        .status()?;
+    ensure!(status.success(), "failed to run souffle");
+
+    let mut stops = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b'\t')
+        .from_path("output/souffle-plan.tsv")?
+        .into_deserialize()
+        .collect::<Result<Vec<ParkStop>, _>>()?;
+    stops.sort_unstable_by(|a, b| a.stop_ix.cmp(&b.stop_ix));
+
+    let get_width = |f: fn(&ParkStop) -> usize, def: usize| -> usize {
+        stops.iter().map(f).max().unwrap_or(def)
+    };
+
+    let from_width = get_width(|s| s.park_name_from.len(), 20);
+    let to_width = get_width(|s| s.park_name_to.len(), 20);
+    let dist_width = get_width(|s| s.distance.round().to_string().len(), 10) + 3;
+    let stop_width = get_width(|s| s.stop_ix.to_string().len(), 2);
+
+    for stop in stops {
+        println!(
+            "{ix:>stop_width$}: {from:>from_width$} ---> {to:<to_width$} {dist:^dist_width$.2}",
+            ix = stop.stop_ix,
+            stop_width = stop_width,
+            from = stop.park_name_from,
+            to = stop.park_name_to,
+            dist = stop.distance,
+            from_width = from_width,
+            to_width = to_width,
+            dist_width = dist_width
+        );
     }
     Ok(())
 }
