@@ -16,31 +16,41 @@
 .decl location(camp:CampId, lat:float, long: float)
 .input location(filename="location.facts")
 
+.decl amenities(camp:CampId, rv:number, internet:symbol, cell:symbol, dump:symbol)
+.input amenities(filename="amenities.facts")
+
 /************* generate road trips **************/
 
-// Distance between stops shouldn't exceed 500 miles
-// We're going from FL to WA so don't backtrack east
+// 1. Distance between stops should be at least 100 to make progress
+// 2. Distance between stops shouldn't exceed 500 miles to fit in a weekend
+// 3. We're going from FL to WA so don't backtrack east
+// 4. Only stop at places that support a 34' RV (note: some campgrounds don't
+//    have accurate rv limits here and just list 0')
 .decl segment_candidate(from:CampId, to:CampId, dist: Distance)
 segment_candidate(f, t, l) :-
   (distance(f,t,l) ; distance(t,f,l)),
-  50 <= l,
-  l <= 500,
+  100 <= l,
+  l <= 540,
   location(f, _, f_long),
   location(t, _, t_long),
-  f_long >= t_long.
+  f_long >= t_long,
+  amenities(f, f_rvlen, _, _, _),
+  amenities(t, t_rvlen, _, _, _),
+  (f_rvlen = 0 ; f_rvlen >= 34),
+  (t_rvlen = 0 ; t_rvlen >= 34).
 
 // Generate a non-deterministic path
-.decl road_trip_segment(from:CampId, to:CampId, dist: Distance, stop_ix: number) choice-domain from, to
+.decl road_trip_segment(from:CampId, to:CampId, dist: Distance, stop_ix: number) choice-domain from
 
 // Start somewhere in the Everglades
-road_trip_segment(f, t, d, 1) :- camp(f, "ever", _), segment_candidate(f, t, d).
+road_trip_segment(f, t, d, 1) :- camp(f, "ever", "Flamingo Campground"), segment_candidate(f, t, d).
 road_trip_segment(f, t, acc+d, ix+1) :- road_trip_segment(_, f, acc, ix), segment_candidate(f, t, d).
 
-.decl ex(p1: Name, p2: Name, d: Distance, ix: number)
+.decl ex(p1: Name, c1: Name, p2: Name, c2:Name, d: Distance, ix: number)
 .output ex(filename="souffle-plan.tsv")
-ex(p1, p2, d, ix) :-
+ex(p1, c1, p2, c2, d, ix) :-
   road_trip_segment(f, t, d, ix),
-  camp(f, pid1, _),
-  camp(t, pid2, _),
+  camp(f, pid1, c1),
+  camp(t, pid2, c2),
   park(pid1, p1),
   park(pid2, p2).

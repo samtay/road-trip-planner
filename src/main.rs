@@ -113,7 +113,9 @@ fn generate_distances() -> Result<()> {
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct ParkStop {
     park_name_from: String,
+    camp_name_from: String,
     park_name_to: String,
+    camp_name_to: String,
     distance: f64,
     stop_ix: u32,
 }
@@ -137,26 +139,23 @@ fn souffle() -> Result<()> {
         .collect::<Result<Vec<ParkStop>, _>>()?;
     stops.sort_unstable_by(|a, b| a.stop_ix.cmp(&b.stop_ix));
 
-    let get_width = |f: fn(&ParkStop) -> usize, def: usize| -> usize {
-        stops.iter().map(f).max().unwrap_or(def)
-    };
+    let name_width = stops
+        .iter()
+        .map(|s| s.park_name_from.len() + s.camp_name_from.len() + 2)
+        .max()
+        .unwrap_or(20);
 
-    let from_width = get_width(|s| s.park_name_from.len(), 20);
-    let to_width = get_width(|s| s.park_name_to.len(), 20);
-    let dist_width = get_width(|s| s.distance.round().to_string().len(), 10) + 3;
-    let stop_width = get_width(|s| s.stop_ix.to_string().len(), 2);
-
+    println!(
+        "{name:^width$}",
+        name = format!("{}: {}", stops[0].park_name_from, stops[0].camp_name_from),
+        width = name_width,
+    );
     for stop in stops {
+        println!("{:^width$}", "\u{21A1}", width = name_width);
         println!(
-            "{ix:>stop_width$}: {from:>from_width$} ---> {to:<to_width$} {dist:^dist_width$.2}",
-            ix = stop.stop_ix,
-            stop_width = stop_width,
-            from = stop.park_name_from,
-            to = stop.park_name_to,
-            dist = stop.distance,
-            from_width = from_width,
-            to_width = to_width,
-            dist_width = dist_width
+            "{name:^width$}",
+            name = format!("{}: {}", stop.park_name_to, stop.camp_name_to),
+            width = name_width,
         );
     }
     Ok(())
