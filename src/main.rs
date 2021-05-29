@@ -1,3 +1,5 @@
+mod crepe;
+
 use anyhow::{bail, ensure, Result};
 use clap::{App, ArgMatches};
 use geo::prelude::*;
@@ -8,23 +10,20 @@ use std::process::{Command, Stdio};
 
 fn main() -> Result<()> {
     let cli = cli_opts();
+    if cli.is_present("refresh") {
+        fetch_data()?;
+    }
     match cli.subcommand() {
-        Some(("fetch-data", _)) => {
-            fetch_data()?;
-        }
-        Some(("souffle", sub)) => {
-            if sub.is_present("refresh") {
-                fetch_data()?;
-            }
+        Some(("souffle", _)) => {
             souffle()?;
+        }
+        Some(("crepe", _)) => {
+            println!("{:?}", crepe::run());
         }
         Some(_) => {
             bail!("subcommand not recognized");
         }
-        None => {
-            fetch_data()?;
-            souffle()?;
-        }
+        None => {}
     }
     Ok(())
 }
@@ -33,12 +32,9 @@ fn main() -> Result<()> {
 fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
-        .subcommand(App::new("fetch-data").about("Generate data/*.facts"))
-        .subcommand(
-            App::new("souffle")
-                .about("Run souffle plan")
-                .arg("-r, --refresh 'Use fresh NPS data'"),
-        )
+        .arg("-r, --refresh 'Use fresh NPS data'")
+        .subcommand(App::new("souffle").about("Run souffle planner"))
+        .subcommand(App::new("crepe").about("Run crepe planner"))
         .get_matches()
 }
 
@@ -83,7 +79,7 @@ impl LocationRow {
     pub fn distance_to(&self, other: &LocationRow) -> f64 {
         const MILES_PER_METER: f64 = 0.000621371;
         let meters = self.coordinate().haversine_distance(&other.coordinate());
-        return meters * MILES_PER_METER;
+        meters * MILES_PER_METER
     }
 }
 

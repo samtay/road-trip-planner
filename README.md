@@ -2,6 +2,5 @@
 
 ### TODO
 
-1. Actually floats are allowed in Souffle so do that instead of rounding?
-
-(That way we can start off the chain in FL and end in CA)
+1. Try only including reasonable segments into the distances.facts file! E.g. RV
+   length, etc.

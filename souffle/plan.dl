@@ -23,7 +23,7 @@
 
 // 1. Distance between stops should be at least 100 to make progress
 // 2. Distance between stops shouldn't exceed 500 miles to fit in a weekend
-// 3. We're going from FL to WA so don't backtrack east
+// 3. Go north west
 // 4. Only stop at places that support a 34' RV (note: some campgrounds don't
 //    have accurate rv limits here and just list 0')
 .decl segment_candidate(from:CampId, to:CampId, dist: Distance)
@@ -31,9 +31,9 @@ segment_candidate(f, t, l) :-
   (distance(f,t,l) ; distance(t,f,l)),
   100 <= l,
   l <= 540,
-  location(f, _, f_long),
-  location(t, _, t_long),
-  f_long >= t_long,
+  location(f, f_lat, f_long),
+  location(t, t_lat, t_long),
+  (t_lat - f_lat > 0 ; f_long - t_long > 0),
   amenities(f, f_rvlen, _, _, _),
   amenities(t, t_rvlen, _, _, _),
   (f_rvlen = 0 ; f_rvlen >= 34),
