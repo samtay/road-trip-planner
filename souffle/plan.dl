@@ -1,4 +1,3 @@
-/************ data model **************/
 .type ParkId <: symbol
 .type CampId <: symbol
 .type Name <: symbol
@@ -10,7 +9,7 @@
 .decl park(park:ParkId, name:Name)
 .input park(filename="park.facts")
 
-.decl distance(camp1:CampId, camp2:CampId, dist: Distance)
+.decl distance(camp1:CampId, camp2:CampId, dist:Distance)
 .input distance(filename="distance.facts")
 
 .decl location(camp:CampId, lat:float, long: float)
@@ -19,37 +18,57 @@
 .decl amenities(camp:CampId, rv:number, internet:symbol, cell:symbol, dump:symbol)
 .input amenities(filename="amenities.facts")
 
-/************* generate road trips **************/
+// Campgrounds that fit our RV
+// (note: some campgrounds don't have accurate rv limits here and just list 0)
+.decl rv_camp(id:CampId)
+rv_camp(id) :- camp(id, _, _), amenities(id, rv_len, _, _, _), (rv_len = 0 ; rv_len >= 34).
 
-// 1. Distance between stops should be at least 100 to make progress
-// 2. Distance between stops shouldn't exceed 500 miles to fit in a weekend
-// 3. Go north west
-// 4. Only stop at places that support a 34' RV (note: some campgrounds don't
-//    have accurate rv limits here and just list 0')
-.decl segment_candidate(from:CampId, to:CampId, dist: Distance)
-segment_candidate(f, t, l) :-
-  (distance(f,t,l) ; distance(t,f,l)),
-  100 <= l,
-  l <= 540,
-  location(f, f_lat, f_long),
-  location(t, t_lat, t_long),
-  (t_lat - f_lat > 0 ; f_long - t_long > 0),
-  amenities(f, f_rvlen, _, _, _),
-  amenities(t, t_rvlen, _, _, _),
-  (f_rvlen = 0 ; f_rvlen >= 34),
-  (t_rvlen = 0 ; t_rvlen >= 34).
+// Distances between campgrounds that fit our RV
+.decl rv_dist(camp1:CampId, camp2:CampId, dist:Distance)
+rv_dist(from, to, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
+rv_dist(to, from, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
+
+// End location near Mount Rainier
+.decl camp_near_seattle(camp:CampId)
+camp_near_seattle(c) :- camp(c, "mora", "Cougar Rock Campground").
+
+// Optimized road trip segments
+// 1. Limit 600mi between stops
+// 2. Exceed 100mi between stops
+// 3. Make progress towards final destination
+.decl segment(camp1:CampId, camp2:CampId, dist:Distance)
+segment(from, to, len) :-
+  rv_dist(from, to, len),
+  100 <= len, len <= 600,
+  rv_dist(from, end, dist_from),
+  rv_dist(to, end, dist_to),
+  dist_from > dist_to,
+  camp_near_seattle(end).
 
 // Generate a non-deterministic path
-.decl road_trip_segment(from:CampId, to:CampId, dist: Distance, stop_ix: number) choice-domain from
+.decl road_trip_segment(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
 
-// Start somewhere in the Everglades
-road_trip_segment(f, t, d, 1) :- camp(f, "ever", "Flamingo Campground"), segment_candidate(f, t, d).
-road_trip_segment(f, t, acc+d, ix+1) :- road_trip_segment(_, f, acc, ix), segment_candidate(f, t, d).
+// Start in the Everglades
+road_trip_segment(f, t, d, d, 1) :-
+  camp(f, "ever", "Flamingo Campground"), segment(f, t, d).
+// Stop at Mount Rainier
+road_trip_segment(f, t, d, acc+d, ix+1) :-
+  road_trip_segment(_, f, _, acc, ix),
+  segment(f, t, d).
 
-.decl ex(p1: Name, c1: Name, p2: Name, c2:Name, d: Distance, ix: number)
+// Generate a path with minimum distance between stops
+.decl road_trip_segment_min(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
+road_trip_segment_min(f, t, d, d, 1) :-
+  camp(f, "ever", "Flamingo Campground"), segment(f, t, d).
+// Stop at Mount Rainier
+road_trip_segment_min(f, t, d, acc+d, ix+1) :-
+  road_trip_segment_min(_, f, _, acc, ix),
+  d = min l : segment(f, t, l).
+
+.decl ex(p1:Name, c1:Name, p2:Name, c2:Name, d:Distance, acc:Distance, ix:number)
 .output ex(filename="souffle-plan.tsv")
-ex(p1, c1, p2, c2, d, ix) :-
-  road_trip_segment(f, t, d, ix),
+ex(p1, c1, p2, c2, d, acc, ix) :-
+  road_trip_segment(f, t, d, acc, ix),
   camp(f, pid1, c1),
   camp(t, pid2, c2),
   park(pid1, p1),

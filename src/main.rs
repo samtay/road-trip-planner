@@ -91,7 +91,7 @@ fn generate_distances() -> Result<()> {
         .from_path("data/location.facts")?
         .into_deserialize()
         .filter_map(|x: std::result::Result<LocationRow, csv::Error>| x.ok())
-        .combinations(2);
+        .combinations_with_replacement(2);
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
@@ -113,12 +113,15 @@ struct ParkStop {
     park_name_to: String,
     camp_name_to: String,
     distance: f64,
+    acc_distance: f64,
     stop_ix: u32,
 }
 
 /// Run souffle/plan.dl
 fn souffle() -> Result<()> {
+    std::fs::remove_file("output/souffle-plan.tsv").unwrap_or(());
     let status = Command::new("souffle")
+        .stderr(Stdio::null())
         .arg("--fact-dir")
         .arg("data")
         .arg("--output-dir")
@@ -141,6 +144,11 @@ fn souffle() -> Result<()> {
         .max()
         .unwrap_or(20);
 
+    ensure!(
+        stops.len() > 0,
+        "No road trip found for the given constraints"
+    );
+
     println!(
         "{name:^width$}",
         name = format!("{}: {}", stops[0].park_name_from, stops[0].camp_name_from),
@@ -148,11 +156,13 @@ fn souffle() -> Result<()> {
     );
     for stop in stops {
         println!("{:^width$}", "\u{21A1}", width = name_width);
-        println!(
+        let name = format!(
             "{name:^width$}",
             name = format!("{}: {}", stop.park_name_to, stop.camp_name_to),
             width = name_width,
         );
+        let dist = format!("{stop:>4.2}", stop = stop.acc_distance);
+        println!("{} ({})", name, dist);
     }
     Ok(())
 }
