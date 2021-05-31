@@ -178,6 +178,8 @@ fn souffle_choice(cli: &ArgMatches) -> Result<()> {
 /// Run souffle/plan-enumerate.dl to output all possible plans
 /// Warning: Easily runs out of memory for road trips of significant size!
 fn souffle_enumerate() -> Result<()> {
+    let status = run_souffle_cmd("souffle/plan-enumerate.dl")?;
+    ensure!(status.success(), "failed to run souffle");
     Ok(())
 }
 
