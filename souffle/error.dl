@@ -1,0 +1,20 @@
+.type CampId <: symbol
+
+.decl camp(camp:CampId)
+camp("a").
+camp("b").
+camp("c").
+
+.decl segment(camp1:CampId, camp2:CampId)
+segment("a", "b").
+segment("b", "c").
+
+.type Path = [head:CampId, tail:Path]
+
+.decl road_trip(x: Path)
+.output road_trip(IO=stdout)
+road_trip(["a", nil]).
+road_trip([t, tail]) :-
+  road_trip(tail),
+  tail=[f,_],
+  segment(f, t).

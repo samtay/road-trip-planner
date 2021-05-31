@@ -1,0 +1,97 @@
+.type ParkId <: symbol
+.type CampId <: symbol
+.type Name <: symbol
+.type Distance <: float
+
+.decl camp(camp:CampId, park: ParkId, name:Name)
+.input camp(filename="campground.facts")
+
+.decl park(park:ParkId, name:Name)
+.input park(filename="park.facts")
+
+.decl distance(camp1:CampId, camp2:CampId, dist:Distance)
+.input distance(filename="distance.facts")
+
+.decl location(camp:CampId, lat:float, long: float)
+.input location(filename="location.facts")
+
+.decl amenities(camp:CampId, rv:number, internet:symbol, cell:symbol, dump:symbol)
+.input amenities(filename="amenities.facts")
+
+// Starting point park
+.decl starting_point_park(park:ParkId)
+.input starting_point_park(IO=file, filename="from_park")
+
+// Starting campground
+.decl starting_point(camp:CampId)
+starting_point(c) :- camp(c, p, _), starting_point_park(p).
+
+// Ending at park
+.decl final_dest_park(park:ParkId)
+.input final_dest_park(IO=file, filename="to_park")
+
+// Ending campground
+.decl final_dest(camp:CampId)
+final_dest(c) :- camp(c, p, _), final_dest_park(p).
+
+// Campgrounds that fit our RV
+// (note: some campgrounds don't have accurate rv limits here and just list 0)
+.decl rv_camp(id:CampId)
+rv_camp(id) :- camp(id, _, _), amenities(id, rv_len, _, _, _), (rv_len = 0 ; rv_len >= 34).
+
+// Distances between campgrounds that fit our RV
+.decl rv_dist(camp1:CampId, camp2:CampId, dist:Distance)
+rv_dist(from, to, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
+rv_dist(to, from, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
+
+// Optimized road trip segments
+// 1. Limit 600mi between stops
+// 2. Exceed 100mi between stops
+// 3. Make progress towards final destination
+.decl segment(camp1:CampId, camp2:CampId, dist:Distance)
+segment(from, to, len) :-
+  rv_dist(from, to, len),
+  (100 <= len ; dist_to = 0),
+  len <= 600,
+  rv_dist(from, end, dist_from),
+  rv_dist(to, end, dist_to),
+  dist_from > dist_to,
+  final_dest(end).
+
+// Generate a non-deterministic path
+.decl road_trip_segment(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
+road_trip_segment("start", s, 0, 0, 1) :- starting_point(s).
+road_trip_segment(f, t, d, acc+d, ix+1) :-
+  road_trip_segment(_, f, _, acc, ix),
+  segment(f, t, d).
+
+// Generate a path with minimum distance between stops
+.decl road_trip_segment_min(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
+road_trip_segment_min("start", s, 0, 0, 1) :- starting_point(s).
+road_trip_segment_min(f, t, d, acc+d, ix+1) :-
+  road_trip_segment_min(_, f, _, acc, ix),
+  d = min l : segment(f, t, l).
+
+// Generate a path maintaining service
+.decl road_trip_segment_cell(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
+
+road_trip_segment_cell("start", s, 0, 0, 1) :- starting_point(s).
+road_trip_segment_cell(f, t, d, acc+d, ix+1) :-
+  road_trip_segment_cell(_, f, _, acc, ix),
+  segment(f, t, d),
+  amenities(t, _, int, cell, _),
+  (!(int = "No") ; !(cell = "No")).
+
+.decl ex(p:Name, c:Name, d:Distance, acc:Distance, ix:number)
+.output ex(filename="souffle-plan-choice.tsv")
+ex(p, c, d, acc, ix) :-
+  road_trip_segment(_, t, d, acc, ix),
+  camp(t, pid, c),
+  park(pid, p).
+
+.decl ex_min(p:Name, c:Name, d:Distance, acc:Distance, ix:number)
+.output ex_min(filename="souffle-plan-choice-min.tsv")
+ex_min(p, c, d, acc, ix) :-
+  road_trip_segment_min(_, t, d, acc, ix),
+  camp(t, pid, c),
+  park(pid, p).

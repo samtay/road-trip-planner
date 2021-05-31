@@ -1,12 +1,13 @@
 mod crepe;
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use clap::{App, ArgMatches};
 use geo::prelude::*;
 use geo::{point, Point};
 use itertools::Itertools;
 use serde::Deserialize;
-use std::process::{Command, Stdio};
+use std::io::Write;
+use std::process::{Command, ExitStatus, Stdio};
 
 fn main() -> Result<()> {
     let cli = cli_opts();
@@ -14,8 +15,13 @@ fn main() -> Result<()> {
         fetch_data()?;
     }
     match cli.subcommand() {
-        Some(("souffle", _)) => {
-            souffle()?;
+        Some(("souffle", m)) => {
+            souffle_populate_input_files(m)?;
+            if m.is_present("enumerate") {
+                souffle_enumerate()?;
+            } else {
+                souffle_choice(m)?;
+            }
         }
         Some(("crepe", _)) => {
             println!("{:?}", crepe::run());
@@ -33,7 +39,14 @@ fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
         .about("Utility to run the road trip planner")
         .arg("-r, --refresh 'Use fresh NPS data'")
-        .subcommand(App::new("souffle").about("Run souffle planner"))
+        .subcommand(
+            App::new("souffle")
+                .about("Run souffle planner")
+                .arg("-e --enumerate 'Enumerate all trips'")
+                .arg("--min 'Use minimum distance between stops'")
+                .arg("<from> 'Starting park code (e.g. ever)'")
+                .arg("<to> 'Ending park code (e.g. olym)'"),
+        )
         .subcommand(App::new("crepe").about("Run crepe planner"))
         .get_matches()
 }
@@ -108,61 +121,93 @@ fn generate_distances() -> Result<()> {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 struct ParkStop {
-    park_name_from: String,
-    camp_name_from: String,
-    park_name_to: String,
-    camp_name_to: String,
+    park_name: String,
+    camp_name: String,
     distance: f64,
     acc_distance: f64,
     stop_ix: u32,
 }
 
-/// Run souffle/plan.dl
-fn souffle() -> Result<()> {
-    std::fs::remove_file("output/souffle-plan.tsv").unwrap_or(());
-    let status = Command::new("souffle")
-        .stderr(Stdio::null())
-        .arg("--fact-dir")
-        .arg("data")
-        .arg("--output-dir")
-        .arg("output")
-        .arg("souffle/plan.dl")
-        .status()?;
+/// Run souffle/plan-choice.dl to output a single plan
+fn souffle_choice(cli: &ArgMatches) -> Result<()> {
+    std::fs::remove_file("output/souffle-plan-choice.tsv").unwrap_or(());
+    std::fs::remove_file("output/souffle-plan-choice-min.tsv").unwrap_or(());
+    let fp = if cli.is_present("min") {
+        "output/souffle-plan-choice-min.tsv"
+    } else {
+        "output/souffle-plan-choice.tsv"
+    };
+    let status = run_souffle_cmd("souffle/plan-choice.dl")?;
     ensure!(status.success(), "failed to run souffle");
-
     let mut stops = csv::ReaderBuilder::new()
         .has_headers(false)
         .delimiter(b'\t')
-        .from_path("output/souffle-plan.tsv")?
+        .from_path(fp)?
         .into_deserialize()
         .collect::<Result<Vec<ParkStop>, _>>()?;
     stops.sort_unstable_by(|a, b| a.stop_ix.cmp(&b.stop_ix));
-
     let name_width = stops
         .iter()
-        .map(|s| s.park_name_from.len() + s.camp_name_from.len() + 2)
+        .map(|s| s.park_name.len() + s.camp_name.len() + 2)
         .max()
         .unwrap_or(20);
 
     ensure!(
-        stops.len() > 0,
+        stops.len() > 1,
         "No road trip found for the given constraints"
     );
 
-    println!(
-        "{name:^width$}",
-        name = format!("{}: {}", stops[0].park_name_from, stops[0].camp_name_from),
-        width = name_width,
-    );
+    let mut first = true;
     for stop in stops {
-        println!("{:^width$}", "\u{21A1}", width = name_width);
+        if !first {
+            println!("{:^width$}", "\u{21A1}", width = name_width);
+        } else {
+            first = false;
+        }
         let name = format!(
             "{name:^width$}",
-            name = format!("{}: {}", stop.park_name_to, stop.camp_name_to),
+            name = format!("{}: {}", stop.park_name, stop.camp_name),
             width = name_width,
         );
         let dist = format!("{stop:>4.2}", stop = stop.acc_distance);
         println!("{} ({})", name, dist);
     }
+    Ok(())
+}
+
+/// Run souffle/plan-enumerate.dl to output all possible plans
+/// Warning: Easily runs out of memory for road trips of significant size!
+fn souffle_enumerate() -> Result<()> {
+    Ok(())
+}
+
+fn run_souffle_cmd<S: AsRef<std::ffi::OsStr>>(filename: S) -> Result<ExitStatus> {
+    let status = Command::new("souffle")
+        //.stderr(Stdio::null())
+        .arg("--no-warn")
+        .arg("--fact-dir")
+        .arg("data")
+        .arg("--output-dir")
+        .arg("output")
+        .arg(filename)
+        .status()?;
+    Ok(status)
+}
+
+fn souffle_populate_input_files(cli: &ArgMatches) -> Result<()> {
+    let mut start_writer = std::fs::File::create("data/from_park")?;
+    cli.value_of("from")
+        .ok_or(anyhow!("FROM argument is required"))
+        .and_then(|from| {
+            write!(&mut start_writer, "{}", from)?;
+            Ok(())
+        })?;
+    let mut end_writer = std::fs::File::create("data/to_park")?;
+    cli.value_of("to")
+        .ok_or(anyhow!("TO argument is required"))
+        .and_then(|to| {
+            write!(&mut end_writer, "{}", to)?;
+            Ok(())
+        })?;
     Ok(())
 }

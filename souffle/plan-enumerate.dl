@@ -28,9 +28,13 @@ rv_camp(id) :- camp(id, _, _), amenities(id, rv_len, _, _, _), (rv_len = 0 ; rv_
 rv_dist(from, to, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
 rv_dist(to, from, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
 
+// Starting in the everglades
+.decl starting_point(camp:CampId)
+starting_point(c) :- camp(c, "ever", "Flamingo Campground").
+
 // End location near Mount Rainier
-.decl camp_near_seattle(camp:CampId)
-camp_near_seattle(c) :- camp(c, "mora", "Cougar Rock Campground").
+.decl final_dest(camp:CampId)
+final_dest(c) :- camp(c, "mora", "Cougar Rock Campground").
 
 // Optimized road trip segments
 // 1. Limit 600mi between stops
@@ -39,19 +43,19 @@ camp_near_seattle(c) :- camp(c, "mora", "Cougar Rock Campground").
 .decl segment(camp1:CampId, camp2:CampId, dist:Distance)
 segment(from, to, len) :-
   rv_dist(from, to, len),
-  100 <= len, len <= 600,
+  (100 <= len ; dist_to = 0),
+  len <= 600,
   rv_dist(from, end, dist_from),
   rv_dist(to, end, dist_to),
   dist_from > dist_to,
-  camp_near_seattle(end).
+  final_dest(end).
 
 // Generate a non-deterministic path
 .decl road_trip_segment(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
 
-// Start in the Everglades
 road_trip_segment(f, t, d, d, 1) :-
-  camp(f, "ever", "Flamingo Campground"), segment(f, t, d).
-// Stop at Mount Rainier
+  starting_point(f),
+  segment(f, t, d).
 road_trip_segment(f, t, d, acc+d, ix+1) :-
   road_trip_segment(_, f, _, acc, ix),
   segment(f, t, d).
@@ -59,11 +63,25 @@ road_trip_segment(f, t, d, acc+d, ix+1) :-
 // Generate a path with minimum distance between stops
 .decl road_trip_segment_min(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
 road_trip_segment_min(f, t, d, d, 1) :-
-  camp(f, "ever", "Flamingo Campground"), segment(f, t, d).
-// Stop at Mount Rainier
+  starting_point(f),
+  segment(f, t, d).
 road_trip_segment_min(f, t, d, acc+d, ix+1) :-
   road_trip_segment_min(_, f, _, acc, ix),
   d = min l : segment(f, t, l).
+
+// Generate a path maintaining service
+.decl road_trip_segment_cell(from:CampId, to:CampId, dist:Distance, acc:Distance, stop_ix:number) choice-domain from
+
+road_trip_segment_cell(f, t, d, d, 1) :-
+  starting_point(f),
+  segment(f, t, d),
+  amenities(t, _, int, cell, _),
+  (!(int = "No") ; !(cell = "No")).
+road_trip_segment_cell(f, t, d, acc+d, ix+1) :-
+  road_trip_segment_cell(_, f, _, acc, ix),
+  segment(f, t, d),
+  amenities(t, _, int, cell, _),
+  (!(int = "No") ; !(cell = "No")).
 
 .decl ex(p1:Name, c1:Name, p2:Name, c2:Name, d:Distance, acc:Distance, ix:number)
 .output ex(filename="souffle-plan.tsv")
@@ -73,3 +91,31 @@ ex(p1, c1, p2, c2, d, acc, ix) :-
   camp(t, pid2, c2),
   park(pid1, p1),
   park(pid2, p2).
+
+.type Segment = [from:CampId, to:CampId]
+.type Path = [tail:Path, head:Segment]
+
+.decl road_trip(x: Path)
+.output road_trip(filename="intermediate.tsv")
+road_trip([nil, [f, t]]) :-
+  starting_point(f),
+  segment(f, t, _),
+  !amenities(t, _, _, "No", _),
+  !amenities(t, _, _, _, "_No").
+road_trip([tail, [f,t]]) :-
+  road_trip(tail),
+  tail=[tail2, [start, f]],
+  segment(f, t, _),
+  !amenities(t, _, _, "No", _),
+  !amenities(t, _, _, _, "_No").
+
+.decl successful_road_trip(x: Path)
+.output successful_road_trip(filename="testing.tsv")
+successful_road_trip(path) :-
+  road_trip(path),
+  path=[tail, [f, end]],
+  final_dest(end).
+
+.decl total_trips(x: number)
+.output total_trips(IO=stdout)
+total_trips(x) :- x = count : { successful_road_trip(_) }.
