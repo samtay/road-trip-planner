@@ -58,24 +58,28 @@ segment(from, to, len) :-
   dist_from > dist_to,
   final_dest(end).
 
-.type Segment = [from:CampId, to:CampId]
-.type Path = [tail:Path, head:Segment]
+.type ParkStop = [park:Name, camp:Name, id:CampId]
+.type Path = [tail:Path, head:ParkStop]
 
 .decl road_trip(x: Path)
 .output road_trip(filename="intermediate.tsv")
-road_trip([nil, [f, t]]) :-
+road_trip([nil, [pname, cname, f]]) :-
   starting_point(f),
-  segment(f, t, _).
-road_trip([tail, [f,t]]) :-
+  segment(f, t, _),
+  camp(f, pid, cname),
+  park(pid, pname).
+road_trip([tail, [pname, cname, t]]) :-
   road_trip(tail),
-  tail=[tail2, [start, f]],
-  segment(f, t, _).
+  tail=[tail2, [fpn, fcn, f]],
+  segment(f, t, _),
+  camp(f, pid, cname),
+  park(pid, pname).
 
 .decl successful_road_trip(x: Path)
 .output successful_road_trip(IO=stdout)
 successful_road_trip(path) :-
   road_trip(path),
-  path=[tail, [f, end]],
+  path=[tail, [epn, ecn, end]],
   final_dest(end).
 
 .decl total_trips(x: number)
