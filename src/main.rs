@@ -49,7 +49,6 @@ fn fetch_nps_data() -> Result<()> {
     fn run_script<S: AsRef<std::ffi::OsStr>>(script_path: S) -> Result<bool> {
         let status = Command::new("sh")
             .arg(script_path)
-            .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status()?;
         Ok(status.success())

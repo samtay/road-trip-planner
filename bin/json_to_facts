@@ -20,7 +20,7 @@ filter=$(cat <<-jqfilter
   | @tsv
 jqfilter
 )
-jq -r "$filter" campgrounds.json > campground.facts
+jq -r "$filter" campgrounds.json | sed 's/,/;/g' > campground.facts
 
 # campground locations
 filter=$(cat <<-jqfilter
