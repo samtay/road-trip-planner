@@ -65,23 +65,19 @@ segment(from, to, len) :-
 .output road_trip(filename="intermediate.tsv")
 road_trip([nil, [pname, cname, f]]) :-
   starting_point(f),
-  segment(f, t, _),
+  /*segment(f, t, _),*/
   camp(f, pid, cname),
   park(pid, pname).
 road_trip([tail, [pname, cname, t]]) :-
   road_trip(tail),
   tail=[tail2, [fpn, fcn, f]],
   segment(f, t, _),
-  camp(f, pid, cname),
+  camp(t, pid, cname),
   park(pid, pname).
 
 .decl successful_road_trip(x: Path)
-.output successful_road_trip(IO=stdout)
+.output successful_road_trip(filename="souffle-plan-enumerate.tsv")
 successful_road_trip(path) :-
   road_trip(path),
   path=[tail, [epn, ecn, end]],
   final_dest(end).
-
-.decl total_trips(x: number)
-.output total_trips(IO=stdout)
-total_trips(x) :- x = count : { successful_road_trip(_) }.

@@ -2,5 +2,5 @@
 
 ### TODO
 
-1. Try only including reasonable segments into the distances.facts file! E.g. RV
-   length, etc.
+1. Include the same choice details in list enumeration, parse into LocationRow
+   to keep the same stdout.

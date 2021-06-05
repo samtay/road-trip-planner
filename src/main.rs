@@ -1,4 +1,5 @@
 mod crepe;
+mod parser;
 
 use anyhow::{anyhow, bail, ensure, Result};
 use clap::{App, ArgMatches};
@@ -102,8 +103,8 @@ fn generate_distances() -> Result<()> {
         .has_headers(false)
         .delimiter(b'\t')
         .from_path("data/location.facts")?
-        .into_deserialize()
-        .filter_map(|x: std::result::Result<LocationRow, csv::Error>| x.ok())
+        .into_deserialize::<LocationRow>()
+        .filter_map(|x| x.ok())
         .combinations_with_replacement(2);
     let mut writer = csv::WriterBuilder::new()
         .has_headers(false)
@@ -180,7 +181,7 @@ fn souffle_choice(cli: &ArgMatches) -> Result<()> {
 fn souffle_enumerate() -> Result<()> {
     let status = run_souffle_cmd("souffle/plan-enumerate.dl")?;
     ensure!(status.success(), "failed to run souffle");
-    Ok(())
+    parser::parse_enumerate_output()
 }
 
 fn run_souffle_cmd<S: AsRef<std::ffi::OsStr>>(filename: S) -> Result<ExitStatus> {
@@ -199,14 +200,14 @@ fn run_souffle_cmd<S: AsRef<std::ffi::OsStr>>(filename: S) -> Result<ExitStatus>
 fn souffle_populate_input_files(cli: &ArgMatches) -> Result<()> {
     let mut start_writer = std::fs::File::create("data/from_park")?;
     cli.value_of("from")
-        .ok_or(anyhow!("FROM argument is required"))
+        .ok_or_else(|| anyhow!("FROM argument is required"))
         .and_then(|from| {
             write!(&mut start_writer, "{}", from)?;
             Ok(())
         })?;
     let mut end_writer = std::fs::File::create("data/to_park")?;
     cli.value_of("to")
-        .ok_or(anyhow!("TO argument is required"))
+        .ok_or_else(|| anyhow!("TO argument is required"))
         .and_then(|to| {
             write!(&mut end_writer, "{}", to)?;
             Ok(())
