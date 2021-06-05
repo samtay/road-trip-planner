@@ -51,27 +51,25 @@ rv_dist(to, from, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
 .decl segment(camp1:CampId, camp2:CampId, dist:Distance)
 segment(from, to, len) :-
   rv_dist(from, to, len),
-  (100 <= len ; dist_to = 0),
   len <= 600,
   rv_dist(from, end, dist_from),
   rv_dist(to, end, dist_to),
-  dist_from > dist_to,
+  dist_from - dist_to > 200,
   final_dest(end).
 
-.type ParkStop = [park:Name, camp:Name, id:CampId]
+.type ParkStop = [id:CampId, park:Name, camp:Name, acc:Distance, ix: number]
 .type Path = [tail:Path, head:ParkStop]
 
 .decl road_trip(x: Path)
 .output road_trip(filename="intermediate.tsv")
-road_trip([nil, [pname, cname, f]]) :-
+road_trip([nil, [f, pname, cname, 0, 1]]) :-
   starting_point(f),
-  /*segment(f, t, _),*/
   camp(f, pid, cname),
   park(pid, pname).
-road_trip([tail, [pname, cname, t]]) :-
+road_trip([tail, [t, pname, cname, acc+d, ix+1]]) :-
   road_trip(tail),
-  tail=[tail2, [fpn, fcn, f]],
-  segment(f, t, _),
+  tail=[tail2, [f, fpn, fcn, acc, ix]],
+  segment(f, t, d),
   camp(t, pid, cname),
   park(pid, pname).
 
@@ -79,5 +77,5 @@ road_trip([tail, [pname, cname, t]]) :-
 .output successful_road_trip(filename="souffle-plan-enumerate.tsv")
 successful_road_trip(path) :-
   road_trip(path),
-  path=[tail, [epn, ecn, end]],
+  path=[tail, [end, epn, ecn, ed, eix]],
   final_dest(end).

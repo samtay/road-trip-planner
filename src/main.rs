@@ -1,13 +1,12 @@
-mod crepe;
-mod parser;
-
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, ensure, Result};
 use clap::{App, ArgMatches};
 use geo::prelude::*;
 use geo::{point, Point};
 use itertools::Itertools;
 use serde::Deserialize;
-use std::io::Write;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{BufReader, Write};
 use std::process::{Command, ExitStatus, Stdio};
 
 fn main() -> Result<()> {
@@ -15,22 +14,11 @@ fn main() -> Result<()> {
     if cli.is_present("refresh") {
         fetch_data()?;
     }
-    match cli.subcommand() {
-        Some(("souffle", m)) => {
-            souffle_populate_input_files(m)?;
-            if m.is_present("enumerate") {
-                souffle_enumerate()?;
-            } else {
-                souffle_choice(m)?;
-            }
-        }
-        Some(("crepe", _)) => {
-            println!("{:?}", crepe::run());
-        }
-        Some(_) => {
-            bail!("subcommand not recognized");
-        }
-        None => {}
+    souffle_populate_input_files(&cli)?;
+    if cli.is_present("enumerate") {
+        souffle_enumerate()?;
+    } else {
+        souffle_choice(&cli)?;
     }
     Ok(())
 }
@@ -38,17 +26,14 @@ fn main() -> Result<()> {
 /// CLI interface
 fn cli_opts() -> ArgMatches {
     App::new("road-trip-planner")
-        .about("Utility to run the road trip planner")
+        .author("Sam Tay, samctay@pm.me")
+        .version("0.0.1")
+        .about("Generates road trip plans via national parks")
         .arg("-r, --refresh 'Use fresh NPS data'")
-        .subcommand(
-            App::new("souffle")
-                .about("Run souffle planner")
-                .arg("-e --enumerate 'Enumerate all trips'")
-                .arg("--min 'Use minimum distance between stops'")
-                .arg("<from> 'Starting park code (e.g. ever)'")
-                .arg("<to> 'Ending park code (e.g. olym)'"),
-        )
-        .subcommand(App::new("crepe").about("Run crepe planner"))
+        .arg("-e --enumerate 'Enumerate all trips'")
+        .arg("--min 'Use minimum distance between stops'")
+        .arg("<from> 'Starting park code (e.g. ever)'")
+        .arg("<to> 'Ending park code (e.g. olym)'")
         .get_matches()
 }
 
@@ -124,7 +109,6 @@ fn generate_distances() -> Result<()> {
 struct ParkStop {
     park_name: String,
     camp_name: String,
-    distance: f64,
     acc_distance: f64,
     stop_ix: u32,
 }
@@ -147,16 +131,75 @@ fn souffle_choice(cli: &ArgMatches) -> Result<()> {
         .into_deserialize()
         .collect::<Result<Vec<ParkStop>, _>>()?;
     stops.sort_unstable_by(|a, b| a.stop_ix.cmp(&b.stop_ix));
+    ensure!(
+        stops.len() > 1,
+        "No road trip found for the given constraints. Try using --enumerate"
+    );
+    print_stops(stops)
+}
+
+/// Run souffle/plan-enumerate.dl to output all possible plans
+/// Warning: Easily runs out of memory for road trips of significant size!
+fn souffle_enumerate() -> Result<()> {
+    let status = run_souffle_cmd("souffle/plan-enumerate.dl")?;
+    ensure!(status.success(), "failed to run souffle");
+    parse_enumerate_output()
+}
+
+/// Read the souffle output cons list and spit it out in a readable format to stdout
+/// TODO take bufreader and bufwriter
+pub fn parse_enumerate_output() -> Result<()> {
+    let file = File::open("output/souffle-plan-enumerate.tsv")?;
+    let reader = BufReader::new(file);
+
+    let mut count = 0;
+    for plan in reader.lines() {
+        count += 1;
+        let plan = plan?;
+        let stops = parse_stops(&plan)?;
+        let plan_ix_str = format!("Plan {}", count);
+        println!("{}", plan_ix_str);
+        println!("{:-^width$}", "", width = plan_ix_str.len());
+        print_stops(stops)?;
+        println!("{:=^90}", "");
+    }
+    Ok(())
+}
+
+/// Each list item looks like [camp_id, park_name, camp_name, acc_distance, stop_ix]
+fn parse_stops(plan: &str) -> Result<Vec<ParkStop>> {
+    let parse_err = || anyhow!("unexpected output from plan enumeration");
+    let mut stops = plan
+        // Strip the leading cons list chars
+        .split_once("nil, [")
+        .ok_or_else(parse_err)?
+        .1
+        .split("]], [")
+        .collect::<Vec<_>>();
+    if let Some(last_stop) = stops.last_mut() {
+        *last_stop = last_stop.trim_end_matches(']');
+    }
+    let stops = stops
+        .into_iter()
+        .map(|s| {
+            let parts = s.split(", ").collect::<Vec<_>>();
+            ParkStop {
+                park_name: String::from(parts[1]),
+                camp_name: String::from(parts[2]),
+                acc_distance: parts[3].parse().expect("couldn't convert string to float"),
+                stop_ix: parts[4].parse().expect("couldn't convert string to float"),
+            }
+        })
+        .collect::<Vec<_>>();
+    Ok(stops)
+}
+
+fn print_stops(stops: Vec<ParkStop>) -> Result<()> {
     let name_width = stops
         .iter()
         .map(|s| s.park_name.len() + s.camp_name.len() + 2)
         .max()
         .unwrap_or(20);
-
-    ensure!(
-        stops.len() > 1,
-        "No road trip found for the given constraints"
-    );
 
     let mut first = true;
     for stop in stops {
@@ -174,14 +217,6 @@ fn souffle_choice(cli: &ArgMatches) -> Result<()> {
         println!("{} ({})", name, dist);
     }
     Ok(())
-}
-
-/// Run souffle/plan-enumerate.dl to output all possible plans
-/// Warning: Easily runs out of memory for road trips of significant size!
-fn souffle_enumerate() -> Result<()> {
-    let status = run_souffle_cmd("souffle/plan-enumerate.dl")?;
-    ensure!(status.success(), "failed to run souffle");
-    parser::parse_enumerate_output()
 }
 
 fn run_souffle_cmd<S: AsRef<std::ffi::OsStr>>(filename: S) -> Result<ExitStatus> {

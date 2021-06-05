@@ -55,7 +55,7 @@ segment(from, to, len) :-
   len <= 600,
   rv_dist(from, end, dist_from),
   rv_dist(to, end, dist_to),
-  dist_from > dist_to,
+  dist_from - dist_to > 200,
   final_dest(end).
 
 // Generate a non-deterministic path
@@ -82,16 +82,16 @@ road_trip_segment_cell(f, t, d, acc+d, ix+1) :-
   amenities(t, _, int, cell, _),
   (!(int = "No") ; !(cell = "No")).
 
-.decl ex(p:Name, c:Name, d:Distance, acc:Distance, ix:number)
+.decl ex(p:Name, c:Name, acc:Distance, ix:number)
 .output ex(filename="souffle-plan-choice.tsv")
-ex(p, c, d, acc, ix) :-
-  road_trip_segment(_, t, d, acc, ix),
+ex(p, c, acc, ix) :-
+  road_trip_segment(_, t, _, acc, ix),
   camp(t, pid, c),
   park(pid, p).
 
-.decl ex_min(p:Name, c:Name, d:Distance, acc:Distance, ix:number)
+.decl ex_min(p:Name, c:Name, acc:Distance, ix:number)
 .output ex_min(filename="souffle-plan-choice-min.tsv")
-ex_min(p, c, d, acc, ix) :-
-  road_trip_segment_min(_, t, d, acc, ix),
+ex_min(p, c, acc, ix) :-
+  road_trip_segment_min(_, t, _, acc, ix),
   camp(t, pid, c),
   park(pid, p).
