@@ -46,12 +46,10 @@ rv_dist(to, from, len) :- distance(from, to, len), rv_camp(from), rv_camp(to).
 
 // Optimized road trip segments
 // 1. Limit 600mi between stops
-// 2. Exceed 100mi between stops
-// 3. Make progress towards final destination
+// 2. Make 200mi progress towards final destination
 .decl segment(camp1:CampId, camp2:CampId, dist:Distance)
 segment(from, to, len) :-
   rv_dist(from, to, len),
-  (100 <= len ; dist_to = 0),
   len <= 600,
   rv_dist(from, end, dist_from),
   rv_dist(to, end, dist_to),

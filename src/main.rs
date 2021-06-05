@@ -15,10 +15,10 @@ fn main() -> Result<()> {
         fetch_data()?;
     }
     souffle_populate_input_files(&cli)?;
-    if cli.is_present("enumerate") {
-        souffle_enumerate()?;
-    } else {
+    if cli.is_present("lucky") {
         souffle_choice(&cli)?;
+    } else {
+        souffle_enumerate()?;
     }
     Ok(())
 }
@@ -30,8 +30,8 @@ fn cli_opts() -> ArgMatches {
         .version("0.0.1")
         .about("Generates road trip plans via national parks")
         .arg("-r, --refresh 'Use fresh NPS data'")
-        .arg("-e --enumerate 'Enumerate all trips'")
-        .arg("--min 'Use minimum distance between stops'")
+        .arg("-l --lucky 'Output a single trip'")
+        .arg("--min 'Use minimum distance between stops (for --lucky)'")
         .arg("<from> 'Starting park code (e.g. ever)'")
         .arg("<to> 'Ending park code (e.g. olym)'")
         .get_matches()
